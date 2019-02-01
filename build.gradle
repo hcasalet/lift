@@ -1,0 +1,88 @@
+apply plugin: 'java'
+apply plugin: 'maven'
+apply plugin: 'com.google.protobuf'
+
+group = 'edu.ucsc.soe'
+version = '1.0-SNAPSHOT'
+
+description = """"""
+
+sourceCompatibility = 1.7
+targetCompatibility = 1.7
+
+buildscript {
+    repositories {
+        mavenCentral()
+        maven { // The google mirror is less flaky than mavenCentral()
+            url "https://maven-central.storage-download.googleapis.com/repos/central/data/" }
+        maven { url "http://repo.maven.apache.org/maven2" }
+    }
+    dependencies {
+        classpath 'com.google.protobuf:protobuf-gradle-plugin:0.8.5'
+    }
+}
+
+repositories {
+    maven { // The google mirror is less flaky than mavenCentral()
+        url "https://maven-central.storage-download.googleapis.com/repos/central/data/" }
+    mavenLocal()
+}
+
+// updating the version in our release process.
+def grpcVersion = '1.17.0' // CURRENT_GRPC_VERSION
+def nettyTcNativeVersion = '2.0.17.Final'
+def protobufVersion = '3.5.1'
+def protocVersion = '3.5.1-1'
+
+dependencies {
+    compile "com.google.api.grpc:proto-google-common-protos:1.0.0"
+    compile "io.grpc:grpc-alts:${grpcVersion}"
+    compile "io.grpc:grpc-netty-shaded:${grpcVersion}"
+    compile "io.grpc:grpc-protobuf:${grpcVersion}"
+    compile "io.grpc:grpc-stub:${grpcVersion}"
+    compileOnly "javax.annotation:javax.annotation-api:1.2"
+
+    // Used in HelloWorldServerTls
+    compile "io.grpc:grpc-netty:${grpcVersion}"
+    compile "io.netty:netty-tcnative-boringssl-static:${nettyTcNativeVersion}"
+
+    compile "com.google.protobuf:protobuf-java-util:${protobufVersion}"
+
+    testCompile "io.grpc:grpc-testing:${grpcVersion}"
+    testCompile "junit:junit:4.12"
+    testCompile "org.mockito:mockito-core:1.9.5"
+}
+
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:3.5.1-1"
+    }
+    plugins {
+        grpc {
+            artifact = 'io.grpc:protoc-gen-grpc-java:1.18.0'
+        }
+    }
+    generateProtoTasks {
+        all()*.plugins {
+            grpc {}
+        }
+    }
+}
+
+// Inform IDEs like IntelliJ IDEA, Eclipse or NetBeans about the generated code.
+sourceSets {
+    main {
+        java {
+            srcDirs 'build/generated/source/proto/main/grpc'
+            srcDirs 'build/generated/source/proto/main/java'
+        }
+    }
+}
+
+// Generate IntelliJ IDEA's .idea & .iml project files
+apply plugin: 'idea'
+
+// Provide convenience executables for trying out the examples.
+apply plugin: 'application'
+
+startScripts.enabled = false
