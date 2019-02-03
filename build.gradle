@@ -2,6 +2,8 @@ apply plugin: 'java'
 apply plugin: 'maven'
 apply plugin: 'com.google.protobuf'
 
+apply plugin: 'groovy'
+
 group = 'edu.ucsc.soe'
 version = '1.0-SNAPSHOT'
 
@@ -26,6 +28,7 @@ repositories {
     maven { // The google mirror is less flaky than mavenCentral()
         url "https://maven-central.storage-download.googleapis.com/repos/central/data/" }
     mavenLocal()
+    jcenter()
 }
 
 // updating the version in our release process.
@@ -47,6 +50,14 @@ dependencies {
     compile "io.netty:netty-tcnative-boringssl-static:${nettyTcNativeVersion}"
 
     compile "com.google.protobuf:protobuf-java-util:${protobufVersion}"
+
+    // The production code uses the SLF4J logging API at compile time
+    compile 'org.slf4j:slf4j-api:1.7.13'
+
+    compile 'org.codehaus.groovy:groovy-all:2.4.5'
+
+    // Weka API
+    compile 'nz.ac.waikato.cms.weka:weka-stable:3.6.13'
 
     testCompile "io.grpc:grpc-testing:${grpcVersion}"
     testCompile "junit:junit:4.12"
@@ -72,9 +83,13 @@ protobuf {
 // Inform IDEs like IntelliJ IDEA, Eclipse or NetBeans about the generated code.
 sourceSets {
     main {
+        groovy {
+            srcDir 'src/main/groovy'
+        }
         java {
             srcDirs 'build/generated/source/proto/main/grpc'
             srcDirs 'build/generated/source/proto/main/java'
+            srcDir 'src/main/java/io.grpc.consensus'
         }
     }
 }

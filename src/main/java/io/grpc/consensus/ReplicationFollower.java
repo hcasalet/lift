@@ -1,6 +1,5 @@
 package io.grpc.consensus;
 
-import io.grpc.ManagedChannelBuilder;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 
@@ -66,6 +65,5 @@ public class ReplicationFollower {
             server.shutdown();
         }
     }
-
 
 }
