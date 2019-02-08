@@ -7,8 +7,6 @@ apply plugin: 'groovy'
 group = 'edu.ucsc.soe'
 version = '1.0-SNAPSHOT'
 
-description = """"""
-
 sourceCompatibility = 1.7
 targetCompatibility = 1.7
 
@@ -66,7 +64,7 @@ dependencies {
 
 protobuf {
     protoc {
-        artifact = "com.google.protobuf:protoc:3.5.1-1"
+        artifact = "com.google.protobuf:protoc:${protocVersion}"
     }
     plugins {
         grpc {
@@ -101,3 +99,15 @@ apply plugin: 'idea'
 apply plugin: 'application'
 
 startScripts.enabled = false
+
+task replicationLeader(type: CreateStartScripts) {
+    mainClassName = 'io.grpc.consensus.ReplicationLeader'
+    applicationName = 'replication-leader'
+    outputDir = new File(project.buildDir, 'tmp')
+    classpath = jar.outputs.files + project.configurations.runtime
+}
+
+applicationDistribution.into('bin') {
+    from(replicationLeader)
+    fileMode = 0755
+}
