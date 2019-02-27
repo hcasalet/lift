@@ -1,0 +1,61 @@
+//
+// This is the request and response for reaching replication
+//
+
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "io.grpc.replication";
+option java_outer_classname = "ConsensusProto";
+option objc_class_prefix = "CSS";
+
+package replication;
+
+import "transprocessing.proto";
+
+service Replication {
+    // Sends a request to seek replication
+    rpc electLeader (RequestToPrepare) returns (ReplyOfPrepared) {}
+    rpc proposeValue (ValueProposed) returns (ValueAccepted) {}
+}
+
+message RequestToPrepare {
+    int64 sequenceId = 1;
+    string candidate = 2;
+}
+
+message AlreadyAccepted {
+    int64 highestSeenSequenceId = 1;
+    string acceptedCandidate = 2;
+}
+
+message ReplyOfPrepared {
+    string voter = 1;
+    AlreadyAccepted accepted = 2;
+}
+
+message ValueProposed {
+    int32 logPosition = 1;
+    transprocessing.Transaction trans = 2;
+    string proposer = 3;
+}
+
+message ValueAccepted {
+    int32 logPosition = 1;
+    string acceptor = 2;
+}
+
+message LogItem {
+    enum Type {
+        INSERT = 0;
+        UPDATE = 1;
+        DELETE = 2;
+    }
+    Type type = 1;
+    string key = 2;
+    string value = 3;
+}
+
+message ReplicationLog {
+    repeated transprocessing.Transaction transItem = 1;
+}

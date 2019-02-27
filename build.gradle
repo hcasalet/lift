@@ -7,8 +7,8 @@ apply plugin: 'groovy'
 group = 'edu.ucsc.soe'
 version = '1.0-SNAPSHOT'
 
-sourceCompatibility = 1.7
-targetCompatibility = 1.7
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
 
 buildscript {
     repositories {
@@ -87,7 +87,8 @@ sourceSets {
         java {
             srcDirs 'build/generated/source/proto/main/grpc'
             srcDirs 'build/generated/source/proto/main/java'
-            srcDir 'src/main/java/io.grpc.consensus'
+            srcDir 'src/main/java/io.grpc.replication'
+            srcDir 'src/main/java/io.grpc.transprocessing'
         }
     }
 }
@@ -101,13 +102,29 @@ apply plugin: 'application'
 startScripts.enabled = false
 
 task replicationLeader(type: CreateStartScripts) {
-    mainClassName = 'io.grpc.consensus.ReplicationLeader'
+    mainClassName = 'io.grpc.replication.ReplicationLeader'
     applicationName = 'replication-leader'
+    outputDir = new File(project.buildDir, 'tmp')
+    classpath = jar.outputs.files + project.configurations.runtime
+}
+
+task transactionProcessor(type: CreateStartScripts) {
+    mainClassName = 'io.grpc.transprocessing.TransactionProcessor'
+    applicationName = 'transaction-processor'
+    outputDir = new File(project.buildDir, 'tmp')
+    classpath = jar.outputs.files + project.configurations.runtime
+}
+
+task transactionSubmitter(type: CreateStartScripts) {
+    mainClassName = 'io.grpc.transprocessing.TransactionSubmitter'
+    applicationName = 'transaction-submitter'
     outputDir = new File(project.buildDir, 'tmp')
     classpath = jar.outputs.files + project.configurations.runtime
 }
 
 applicationDistribution.into('bin') {
     from(replicationLeader)
+    from(transactionProcessor)
+    from(transactionSubmitter)
     fileMode = 0755
 }
