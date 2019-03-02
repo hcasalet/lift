@@ -8,10 +8,12 @@ import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 import com.google.protobuf.Message;
+import io.grpc.transprocessing.Transaction;
 
-public class ReplicationLeader {
+public class ReplicationClient {
 
-    private static final Logger logger = Logger.getLogger(ReplicationFollower.class.getName());
+    private static final Logger logger = Logger.getLogger(ReplicationServer.class.getName());
+    private static int logPosition = 1;
 
     private final ManagedChannel channel;
     private final ReplicationGrpc.ReplicationBlockingStub blockingStub;
@@ -21,12 +23,12 @@ public class ReplicationLeader {
     private Random random = new Random();
 
     /** Construct a replication leader, which is taking the role of the "client" in terms of the communication. */
-    public ReplicationLeader(String peerHost, int peerPort, String leaderName) {
+    public ReplicationClient(String peerHost, int peerPort, String leaderName) {
         this(ManagedChannelBuilder.forAddress(peerHost, peerPort).usePlaintext(), leaderName);
     }
 
     /** Construct a replication leader for accessing a follower through the existing channel */
-    public ReplicationLeader(ManagedChannelBuilder<?> channelBuilder, String leaderName) {
+    public ReplicationClient(ManagedChannelBuilder<?> channelBuilder, String leaderName) {
         channel = channelBuilder.build();
         blockingStub = ReplicationGrpc.newBlockingStub(channel);
         asyncStub = ReplicationGrpc.newStub(channel);
@@ -53,15 +55,24 @@ public class ReplicationLeader {
             String votingNode = reply.getVoter();
             logger.info("Node " + votingNode + "voted for " + hostname);
         }
+    }
 
+    /**
+     * Request for replication
+     */
+    public void proposeValue(Transaction transaction) {
+        ValueProposed.Builder valueBuilder = ValueProposed.newBuilder();
+        valueBuilder.setLogPosition(logPosition++).setTrans(transaction).setProposer(this.hostname);
+
+        this.blockingStub.proposeValue(valueBuilder.build());
     }
 
     /**
      * main to start a leader
      */
     public static void main(String[] args) {
-        ReplicationLeader replicationLeader = new ReplicationLeader(args[0], Integer.parseInt(args[1]), args[2]);
-        replicationLeader.electLeader();
+        ReplicationClient replicationClient = new ReplicationClient(args[0], Integer.parseInt(args[1]), args[2]);
+        replicationClient.electLeader();
     }
 
     @VisibleForTesting

@@ -24,7 +24,6 @@ message Operation {
     enum Type {
         READ = 0;
         WRITE = 1;
-        READWRITE = 2;
     }
     Type      type = 1;
     KV        kvPair = 2;

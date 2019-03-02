@@ -21,9 +21,9 @@ import java.util.Map;
 public class ReplicationUtil {
 
     /** Get the default log file from the class path */
-    public static URL getDefaultReplicationLogFile() {
-        return ReplicationFollower.class.getResource("route_guide_db.json");
-    }
+    /*public static URL getDefaultReplicationLogFile() {
+        return ReplicationServer.class.getResource("replicate_log.json");
+    }*/
 
     /**
      * Parses the JSON input file containing the list of features.

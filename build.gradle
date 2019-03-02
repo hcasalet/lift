@@ -101,16 +101,16 @@ apply plugin: 'application'
 
 startScripts.enabled = false
 
-task replicationLeader(type: CreateStartScripts) {
-    mainClassName = 'io.grpc.replication.ReplicationLeader'
-    applicationName = 'replication-leader'
+task replicationServer(type: CreateStartScripts) {
+    mainClassName = 'io.grpc.replication.ReplicationServer'
+    applicationName = 'replication-server'
     outputDir = new File(project.buildDir, 'tmp')
     classpath = jar.outputs.files + project.configurations.runtime
 }
 
 task transactionProcessor(type: CreateStartScripts) {
     mainClassName = 'io.grpc.transprocessing.TransactionProcessor'
-    applicationName = 'transaction-processor'
+    applicationName = 'trans-processor'
     outputDir = new File(project.buildDir, 'tmp')
     classpath = jar.outputs.files + project.configurations.runtime
 }
@@ -123,8 +123,8 @@ task transactionSubmitter(type: CreateStartScripts) {
 }
 
 applicationDistribution.into('bin') {
-    from(replicationLeader)
     from(transactionProcessor)
     from(transactionSubmitter)
+    from(replicationServer)
     fileMode = 0755
 }

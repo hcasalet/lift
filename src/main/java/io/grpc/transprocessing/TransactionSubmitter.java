@@ -24,9 +24,9 @@ public class TransactionSubmitter {
     private static final long DURATION_SECONDS = 800;
 
     private final ManagedChannel channel;
-    private final TransactionProcessingGrpc.TransactionProcessingBlockingStub blockingStub;
-    private final TransactionProcessingGrpc.TransactionProcessingStub asyncStub;
     private final String submitterName;
+    private final TransactionProcessingGrpc.TransactionProcessingBlockingStub transProcessingBlockingStub;
+    private final TransactionProcessingGrpc.TransactionProcessingStub transProcessingAsyncStub;
 
     private Random random = new Random();
     private TestHelper testHelper;
@@ -39,10 +39,10 @@ public class TransactionSubmitter {
 
     /** Construct client for contacting the server using the existing channel. */
     public TransactionSubmitter(ManagedChannelBuilder<?> channelBuilder, String clientHostname) {
-        channel = channelBuilder.build();
-        blockingStub = TransactionProcessingGrpc.newBlockingStub(channel);
-        asyncStub = TransactionProcessingGrpc.newStub(channel);
-        submitterName = clientHostname;
+        this.channel = channelBuilder.build();
+        this.submitterName = clientHostname;
+        this.transProcessingBlockingStub = TransactionProcessingGrpc.newBlockingStub(channel);
+        this.transProcessingAsyncStub = TransactionProcessingGrpc.newStub(channel);
     }
 
     public void shutdown() throws InterruptedException {
@@ -127,7 +127,7 @@ public class TransactionSubmitter {
     /** Make an operation that replaces the value of an existing key/value pair */
     private Operation makeUpdateOperation(String updateKey, String updateValue) {
         KV kvPair = KV.newBuilder().setKey(updateKey).setValue(updateValue).build();
-        Operation operation = Operation.newBuilder().setType(Operation.Type.READWRITE).setKvPair(kvPair).build();
+        Operation operation = Operation.newBuilder().setType(Operation.Type.WRITE).setKvPair(kvPair).build();
         return operation;
     }
 
@@ -146,7 +146,7 @@ public class TransactionSubmitter {
 
         ProcessingResult result;
         try {
-            result = this.blockingStub.submitTransaction(trans);
+            result = this.transProcessingBlockingStub.submitTransaction(trans);
             System.out.println("Transaction submitted\n");
 
             if (testHelper != null) {

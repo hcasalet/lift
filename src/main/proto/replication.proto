@@ -19,6 +19,17 @@ service Replication {
     rpc proposeValue (ValueProposed) returns (ValueAccepted) {}
 }
 
+message Peer {
+    string hostIp = 1;
+    int32  port = 2;
+    int64 lastHeard = 3;
+    bool  isLeader = 4;
+}
+
+message PeerList {
+    repeated Peer peer = 1;
+}
+
 message RequestToPrepare {
     int64 sequenceId = 1;
     string candidate = 2;

@@ -2,8 +2,7 @@ package io.grpc.transprocessing;
 
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
-import io.grpc.replication.ReplicationFollower;
-import io.grpc.replication.ReplicationUtil;
+import io.grpc.replication.ReplicationClient;
 import io.grpc.stub.StreamObserver;
 
 import java.io.IOException;
@@ -20,27 +19,28 @@ import java.util.logging.Logger;
 
 public class TransactionProcessor {
     private static final Logger logger = Logger.getLogger(TransactionProcessor.class.getName());
+    private static final Map<String, String> dataStore = new HashMap<>();
 
     private final int port;
     private final Server server;
-    private final String hostname;
+    private List<ReplicationClient> replicationClients = new ArrayList<>();
 
-    public TransactionProcessor(int port, String hostName) throws IOException {
-        this(port, hostName, TransactionUtil.getExistingDataFile(), ReplicationUtil.getDefaultReplicationLogFile());
+    public TransactionProcessor(int port, Map<String, Integer> replicationServers) throws IOException {
+        this(port, TransactionUtil.getExistingDataFile(), replicationServers);
     }
 
     /** create a transaction processing server listening on {@code port} using {@code dataFile} */
-    public TransactionProcessor(int port, String hostName, URL dataFile, URL replicationLogFile) throws IOException {
-        this(ServerBuilder.forPort(port), port, hostName, TransactionUtil.parseData(dataFile), ReplicationUtil.parseLogs(replicationLogFile));
+    public TransactionProcessor(int port, URL dataFile, Map<String, Integer> replicationServers) throws IOException {
+        this(ServerBuilder.forPort(port), port, TransactionUtil.parseData(dataFile), replicationServers);
     }
 
     /** Create a transaction processing server using serverBuilder as a base and key-value pair as data. */
-    public TransactionProcessor(ServerBuilder<?> serverBuilder, int port, String hostName, Collection<KV> kvPairs,
-                                List<Transaction> rlogs) {
+    public TransactionProcessor(ServerBuilder<?> serverBuilder, int port, Collection<KV> kvPairs, Map<String, Integer> replicationServers) {
         this.port = port;
-        this.hostname = hostName;
-        server = serverBuilder.addService(new TransactionProcessingService(kvPairs)).addService(
-                new ReplicationFollower.ReplicationService(hostName, rlogs, kvPairs)).build();
+        for (Map.Entry<String, Integer> item : replicationServers.entrySet()) {
+            this.replicationClients.add(new ReplicationClient(item.getKey(), item.getValue(), item.getKey().concat("-").concat(Integer.toString(item.getValue()))));
+        }
+        server = serverBuilder.addService(new TransactionProcessingService(kvPairs, this.dataStore, this.replicationClients)).build();
     }
 
     /** Start serving requests. */
@@ -78,7 +78,12 @@ public class TransactionProcessor {
      * Main method.  This comment makes the linter happy.
      */
     public static void main(String[] args) throws Exception {
-        TransactionProcessor server = new TransactionProcessor(8980, "localhost");
+        Map<String, Integer> replicationServers = new HashMap<>();
+
+        for (int i=1; i < args.length; i++) {
+            replicationServers.put(args[i], Integer.parseInt(args[++i]));
+        }
+        TransactionProcessor server = new TransactionProcessor(Integer.parseInt(args[0]), replicationServers);
         server.start();
         server.blockUntilShutdown();
     }
@@ -88,20 +93,23 @@ public class TransactionProcessor {
      *
      * <p>See transprocessing.proto for details of the methods.
      */
-    private static class TransactionProcessingService extends TransactionProcessingGrpc.TransactionProcessingImplBase {
+    public static class TransactionProcessingService extends TransactionProcessingGrpc.TransactionProcessingImplBase {
 
         private static final long SLEEP_BEFORE_INQUIRING_AGAIN = 10;
         private static final long MAXIMUM_NUMBER_OF_TRIES_ALLOWED = 3;
 
         private final Collection<KV> kvPairs;
-        private final static Map<String, String> dataStore = new HashMap<>();
         private final static ConcurrentMap<String, List<Lock>> readWriteLocks = new ConcurrentHashMap<>();
+        private Map<String, String> datastore;
+        private List<ReplicationClient> replicationClients;
 
-        TransactionProcessingService(Collection<KV> kvPairs) {
+        public TransactionProcessingService(Collection<KV> kvPairs, Map<String, String> dataStore, List<ReplicationClient> replicationClients) {
             this.kvPairs = kvPairs;
+            this.datastore = dataStore;
             for (KV kvPair : kvPairs) {
-                this.dataStore.put(kvPair.getKey(), kvPair.getValue());
+                this.datastore.put(kvPair.getKey(), kvPair.getValue());
             }
+            this.replicationClients = replicationClients;
         }
 
         @Override
@@ -118,6 +126,7 @@ public class TransactionProcessor {
 
             try {
                 if (acquireLocks(request)) {
+                    doReplication(request);
                     doOperations(request.getOperationList(), builder);
                     releaseLocks(request.getOperationList());
                     builder.setResultType(ProcessingResult.Type.COMMIT).setResultMessage("Transaction successfully committed.");
@@ -245,23 +254,11 @@ public class TransactionProcessor {
             for (Operation operation : operations) {
                 switch(operation.getType()) {
                     case READ:
-                        String readV = this.dataStore.get(operation.getKvPair().getKey());
+                        String readV = this.datastore.get(operation.getKvPair().getKey());
                         doOneOperation(operation, Operation.Type.READ, readV, builder, i++);
                         break;
-                    case READWRITE:
-                        /**
-                         * If read returns a value, the updated value is the oldV + Value_in_KV_pair;
-                         * otherwise readwrite resorts to the same as a pure write.
-                         */
-                        String oldV = this.dataStore.get(operation.getKvPair().getKey());
-                        if (oldV != null) {
-                            this.dataStore.put(operation.getKvPair().getKey(), oldV + operation.getKvPair().getValue());
-                            doOneOperation(operation, Operation.Type.READWRITE,
-                                    oldV.concat(":old, ").concat(operation.getKvPair().getValue()).concat(":new"), builder, i++);
-                            break;
-                        }
                     case WRITE:
-                        this.dataStore.put(operation.getKvPair().getKey(), operation.getKvPair().getValue());
+                        this.datastore.put(operation.getKvPair().getKey(), operation.getKvPair().getValue());
                         doOneOperation(operation, operation.getType(), operation.getKvPair().getValue(), builder, i++);
                         break;
 
@@ -312,6 +309,12 @@ public class TransactionProcessor {
                         }
                     }
                 }
+            }
+        }
+
+        private void doReplication(Transaction trans) {
+            for (ReplicationClient client : this.replicationClients) {
+                client.proposeValue(trans);
             }
         }
     }
