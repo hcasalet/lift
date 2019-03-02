@@ -10,6 +10,10 @@ import java.util.logging.Logger;
 import com.google.protobuf.Message;
 import io.grpc.transprocessing.Transaction;
 
+/**
+ * Replication Client is embedded in a transaction processor.
+ * It does not require a main since it is not an independent entity.
+ */
 public class ReplicationClient {
 
     private static final Logger logger = Logger.getLogger(ReplicationServer.class.getName());
@@ -65,14 +69,6 @@ public class ReplicationClient {
         valueBuilder.setLogPosition(logPosition++).setTrans(transaction).setProposer(this.hostname);
 
         this.blockingStub.proposeValue(valueBuilder.build());
-    }
-
-    /**
-     * main to start a leader
-     */
-    public static void main(String[] args) {
-        ReplicationClient replicationClient = new ReplicationClient(args[0], Integer.parseInt(args[1]), args[2]);
-        replicationClient.electLeader();
     }
 
     @VisibleForTesting

@@ -6,7 +6,6 @@ import io.grpc.stub.StreamObserver;
 import io.grpc.transprocessing.KV;
 import io.grpc.transprocessing.Operation;
 import io.grpc.transprocessing.Transaction;
-import io.grpc.transprocessing.TransactionProcessor;
 import io.grpc.transprocessing.TransactionUtil;
 
 import java.io.IOException;
@@ -18,6 +17,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 
+/**
+ * A replication server is an independent process
+ * To invoke a replication server, do:
+ *
+ * % replication-server <hostIP> <port>
+ *
+ * Need to pass the hostIP because replication server needs it
+ * in its reply to indicate the acceptor name.
+ */
 public class ReplicationServer {
 
     private static final Logger logger = Logger.getLogger(ReplicationServer.class.getName());

@@ -117,7 +117,7 @@ task transactionProcessor(type: CreateStartScripts) {
 
 task transactionSubmitter(type: CreateStartScripts) {
     mainClassName = 'io.grpc.transprocessing.TransactionSubmitter'
-    applicationName = 'transaction-submitter'
+    applicationName = 'trans-submitter'
     outputDir = new File(project.buildDir, 'tmp')
     classpath = jar.outputs.files + project.configurations.runtime
 }

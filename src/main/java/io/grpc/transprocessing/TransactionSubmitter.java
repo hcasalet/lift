@@ -15,6 +15,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
 
+/**
+ * TransactionSubmitter belongs to the application layer, so it is also
+ * an independent entity.
+ *
+ * To invoke a transactionSubmitter, do:
+ * % trans-submitter <serverIP> <serverPort> <clientIP-clientPort>
+ */
 public class TransactionSubmitter {
 
     private static final Logger logger = Logger.getLogger(TransactionSubmitter.class.getName());
@@ -165,7 +172,7 @@ public class TransactionSubmitter {
 
     public static void main(String[] args) throws InterruptedException {
 
-        TransactionSubmitter transactionSubmitter = new TransactionSubmitter("localhost", 8980, args[0]);
+        TransactionSubmitter transactionSubmitter = new TransactionSubmitter(args[0], Integer.parseInt(args[1]), args[2]);
         AtomicBoolean done = new AtomicBoolean();
 
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();

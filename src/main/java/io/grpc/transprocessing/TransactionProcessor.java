@@ -17,6 +17,14 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
+/**
+ * TransactionProcessor is also a replicationClient.
+ * To invoke a transactionProcessor, do:
+ *
+ * % trans-processor <port> <hostIP1> <port1> .... <hostIPn> <portn>
+ *     port: the port where the processor is run
+ *     hostIP and port pairs are for the replication servers.
+ */
 public class TransactionProcessor {
     private static final Logger logger = Logger.getLogger(TransactionProcessor.class.getName());
     private static final Map<String, String> dataStore = new HashMap<>();
