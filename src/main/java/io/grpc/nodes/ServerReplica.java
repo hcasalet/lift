@@ -47,7 +47,7 @@ public class ServerReplica {
             this.replicationClients.add(new ReplicationClient(item.getKey(), item.getValue(), item.getKey().concat("-").concat(Integer.toString(item.getValue()))));
         }
         server = serverBuilder.addService(new TransactionProcessor.TransactionProcessingService(kvPairs, dataStore, this.replicationClients)).addService(
-                new ReplicationServer.ReplicationService(hostIp, kvPairs, dataStore)).build();
+                new ReplicationServer.ReplicationService(hostIp, kvPairs, dataStore, replicationClients)).build();
     }
 
     /** server starts serving requests. */

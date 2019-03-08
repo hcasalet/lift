@@ -9,7 +9,9 @@ import io.grpc.transprocessing.Transaction;
 import io.grpc.transprocessing.TransactionUtil;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.URL;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -34,28 +36,46 @@ public class ReplicationServer {
 
     private final int port;
     private final Server server;
-    private final String hostIP;
+    private final List<ReplicationClient> replClients = new ArrayList<>();
 
-    public ReplicationServer(String hostIP, int port) throws IOException {
-        this(port, TransactionUtil.getExistingDataFile(), hostIP);
+    public ReplicationServer(int port) throws IOException {
+        this(port, TransactionUtil.getExistingDataFile());
     }
 
     /** create a transaction processing server listening on {@code port} using {@code dataFile} */
-    public ReplicationServer(int port, URL dataFile, String hostIP) throws IOException {
-        this(ServerBuilder.forPort(port), port, TransactionUtil.parseData(dataFile), hostIP);
+    public ReplicationServer(int port, URL dataFile) throws IOException {
+        this(ServerBuilder.forPort(port), port, TransactionUtil.parseData(dataFile));
     }
 
     /** Create a transaction processing server using serverBuilder as a base and key-value pair as data. */
-    public ReplicationServer(ServerBuilder<?> serverBuilder, int port, Collection<KV> kvPairs, String hostIP) {
+    public ReplicationServer(ServerBuilder<?> serverBuilder, int port, Collection<KV> kvPair) throws UnknownHostException {
         this.port = port;
-        this.hostIP = hostIP;
-        server = serverBuilder.addService(new ReplicationService(this.hostIP.concat("-").concat(Integer.toString(this.port)), kvPairs, this.dataStore)).build();
+        server = serverBuilder.addService(new ReplicationService(InetAddress.getLocalHost().toString().concat("-").concat(Integer.toString(this.port)),
+                kvPair, this.dataStore, replClients)).build();
     }
 
     /** Start serving requests. */
     public void start() throws IOException {
         server.start();
         logger.info("Server started, listening on " + port);
+
+        long timeNow = System.currentTimeMillis();
+
+        new Thread() {
+            @Override
+            public void run() {
+                long timeThen = System.currentTimeMillis();
+                while (true) {
+                    long timeNow = System.currentTimeMillis();
+                    if ((timeNow - timeThen) > 100) {
+                        System.out.println("Yay!");
+                        timeThen = timeNow;
+                    }
+                }
+
+            }
+        };
+
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
@@ -87,7 +107,7 @@ public class ReplicationServer {
      * Main
      */
     public static void main(String[] args) throws Exception {
-        ReplicationServer server = new ReplicationServer(args[0], Integer.parseInt(args[1]));
+        ReplicationServer server = new ReplicationServer(Integer.parseInt(args[0]));
         server.start();
         server.blockUntilShutdown();
     }
@@ -102,12 +122,39 @@ public class ReplicationServer {
 
         private final Map<String, String> datastore;
         private final String hostname;
+        private final List<ReplicationClient> replicationClients;
 
-        public ReplicationService(String hostName, Collection<KV> kvPairs, Map<String, String> dataStore) {
+        public ReplicationService(String hostName, Collection<KV> kvPairs, Map<String, String> dataStore,
+                                  List<ReplicationClient> replicationClients) {
             this.hostname = hostName;
             this.datastore = dataStore;
             for (KV kvPair : kvPairs) {
                 this.datastore.put(kvPair.getKey(), kvPair.getValue());
+            }
+            this.replicationClients = replicationClients;
+        }
+
+        /**
+         * At the init time, a server that joins after this one will send a handshaking message
+         * to register the replication service on the host with other replicas
+         */
+        @Override
+        public void handShaking(LocalIdentity otherServerInfo, StreamObserver<Welcome> responseObserver) {
+            responseObserver.onNext(registerOtherReplica(otherServerInfo));
+            responseObserver.onCompleted();
+        }
+
+        private Welcome registerOtherReplica(LocalIdentity otherReplica) {
+            Welcome.Builder welcomeBuilder = Welcome.newBuilder();
+            welcomeBuilder.setReplyingHostIp(this.hostname);
+
+            ReplicationClient client = new ReplicationClient(otherReplica.getLocalhostIp(),
+                    otherReplica.getListeningPort(), this.hostname);
+            if (this.replicationClients.add(client)) {
+                welcomeBuilder.setWelcome2JoinMessage("Welcome to join!");
+                return welcomeBuilder.build();
+            } else {
+                return welcomeBuilder.setWelcome2JoinMessage("Failed to register").build();
             }
         }
 

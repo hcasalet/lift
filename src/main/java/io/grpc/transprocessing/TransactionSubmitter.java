@@ -28,7 +28,7 @@ public class TransactionSubmitter {
     private static final int EXISTING_MAX_KEY = 201;
     private static final int MINIMUM_NUMBER_OF_OPERATIONS = 5;
     private static final int NUMBER_OF_OPERATIONS_SEED = 11;
-    private static final long DURATION_SECONDS = 800;
+    private static final long DURATION_SECONDS = 5000;
 
     private final ManagedChannel channel;
     private final String submitterName;
@@ -177,8 +177,10 @@ public class TransactionSubmitter {
 
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         scheduler.schedule(() -> done.set(true), DURATION_SECONDS, TimeUnit.MILLISECONDS);
+        long timeStart = System.currentTimeMillis();
         transactionSubmitter.doSubmissions(done);
-        System.out.println("All job done\n");
+        long timeEnd = System.currentTimeMillis();
+        System.out.println("All job done in" + (timeEnd - timeStart) + "\n");
     }
 
 

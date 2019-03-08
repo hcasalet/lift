@@ -14,9 +14,25 @@ package replication;
 import "transprocessing.proto";
 
 service Replication {
-    // Sends a request to seek replication
+    // Register the replication service on this host to other replicas
+    rpc handShaking(LocalIdentity) returns (Welcome) {}
+
+    // request a vote for becoming the leader
     rpc electLeader (RequestToPrepare) returns (ReplyOfPrepared) {}
+
+    // Sends a request to seek replication
     rpc proposeValue (ValueProposed) returns (ValueAccepted) {}
+}
+
+message LocalIdentity {
+    string localhostIp = 1;
+    int32  listeningPort = 2;
+}
+
+
+message Welcome {
+    string replyingHostIp = 1;
+    string welcome2JoinMessage = 2;
 }
 
 message Peer {

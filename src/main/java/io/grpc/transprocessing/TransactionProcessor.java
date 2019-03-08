@@ -2,11 +2,15 @@ package io.grpc.transprocessing;
 
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.replication.LocalIdentity;
 import io.grpc.replication.ReplicationClient;
+import io.grpc.replication.ReplicationServer;
 import io.grpc.stub.StreamObserver;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.URL;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -21,7 +25,8 @@ import java.util.logging.Logger;
  * TransactionProcessor is also a replicationClient.
  * To invoke a transactionProcessor, do:
  *
- * % trans-processor <port> <hostIP1> <port1> .... <hostIPn> <portn>
+ * % trans-processor <transprocessingOrReplication> <port> <hostIP1> <port1> .... <hostIPn> <portn>
+ *     transprocessingOrReplication: boolean
  *     port: the port where the processor is run
  *     hostIP and port pairs are for the replication servers.
  */
@@ -33,28 +38,41 @@ public class TransactionProcessor {
     private final Server server;
     private List<ReplicationClient> replicationClients = new ArrayList<>();
 
-    public TransactionProcessor(int port, Map<String, Integer> replicationServers) throws IOException {
-        this(port, TransactionUtil.getExistingDataFile(), replicationServers);
+    public TransactionProcessor(int port, List<String> replicationServers, boolean leader) throws IOException {
+        this(port, TransactionUtil.getExistingDataFile(), replicationServers, leader);
     }
 
     /** create a transaction processing server listening on {@code port} using {@code dataFile} */
-    public TransactionProcessor(int port, URL dataFile, Map<String, Integer> replicationServers) throws IOException {
-        this(ServerBuilder.forPort(port), port, TransactionUtil.parseData(dataFile), replicationServers);
+    public TransactionProcessor(int port, URL dataFile, List<String> replicationServers, boolean leader) throws IOException {
+        this(ServerBuilder.forPort(port), port, TransactionUtil.parseData(dataFile), replicationServers, leader);
     }
 
     /** Create a transaction processing server using serverBuilder as a base and key-value pair as data. */
-    public TransactionProcessor(ServerBuilder<?> serverBuilder, int port, Collection<KV> kvPairs, Map<String, Integer> replicationServers) {
+    public TransactionProcessor(ServerBuilder<?> serverBuilder, int port, Collection<KV> kvPairs, List<String> replicationServers, boolean leader)
+    throws UnknownHostException {
         this.port = port;
-        for (Map.Entry<String, Integer> item : replicationServers.entrySet()) {
-            this.replicationClients.add(new ReplicationClient(item.getKey(), item.getValue(), item.getKey().concat("-").concat(Integer.toString(item.getValue()))));
+        for (String repServer : replicationServers) {
+            String repServerHostIp = repServer.substring(0, repServer.lastIndexOf('/'));
+            int repServerHostPort = Integer.parseInt(repServer.substring(repServer.lastIndexOf('/')+1));
+            this.replicationClients.add(new ReplicationClient(repServerHostIp, repServerHostPort, repServer));
         }
-        server = serverBuilder.addService(new TransactionProcessingService(kvPairs, this.dataStore, this.replicationClients)).build();
+
+        if (leader) {
+            server = serverBuilder.addService(new TransactionProcessingService(kvPairs, this.dataStore, this.replicationClients))
+                    .addService(new ReplicationServer.ReplicationService(InetAddress.getLocalHost().toString(), new ArrayList<KV>(), this.dataStore, replicationClients))
+                    .build();
+        } else {
+            server = serverBuilder.addService(new TransactionProcessingService(new ArrayList<KV>(), this.dataStore, this.replicationClients))
+                    .addService(new ReplicationServer.ReplicationService(InetAddress.getLocalHost().toString(), kvPairs, this.dataStore, replicationClients))
+                    .build();
+        }
     }
 
     /** Start serving requests. */
     public void start() throws IOException {
         server.start();
         logger.info("Server started, listening on " + port);
+
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
@@ -86,13 +104,22 @@ public class TransactionProcessor {
      * Main method.  This comment makes the linter happy.
      */
     public static void main(String[] args) throws Exception {
-        Map<String, Integer> replicationServers = new HashMap<>();
+        List<String> replicationServers = new ArrayList<>();
 
-        for (int i=1; i < args.length; i++) {
-            replicationServers.put(args[i], Integer.parseInt(args[++i]));
+        for (int i=2; i < args.length; i++) {
+            replicationServers.add(args[i].concat("/").concat(args[++i]));
         }
-        TransactionProcessor server = new TransactionProcessor(Integer.parseInt(args[0]), replicationServers);
+        TransactionProcessor server = new TransactionProcessor(Integer.parseInt(args[1]), replicationServers, Boolean.parseBoolean(args[0]));
         server.start();
+
+        for(ReplicationClient client : server.replicationClients) {
+            LocalIdentity.Builder identityBuilder = LocalIdentity.newBuilder();
+            identityBuilder.setLocalhostIp(InetAddress.getLocalHost().toString()).setListeningPort(server.port);
+            String otherReplicaIp = client.handShaking(identityBuilder.build());
+            if (otherReplicaIp.isEmpty()) {
+                logger.info("Registering at " + client.getServerHost() + "/" + client.getServerPort() + "failed");
+            }
+        }
         server.blockUntilShutdown();
     }
 
