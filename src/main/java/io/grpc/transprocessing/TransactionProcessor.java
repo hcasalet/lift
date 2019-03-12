@@ -8,6 +8,7 @@ import io.grpc.replication.ReplicationServer;
 import io.grpc.stub.StreamObserver;
 
 import java.io.IOException;
+import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.URL;
 import java.net.UnknownHostException;
@@ -57,15 +58,15 @@ public class TransactionProcessor {
             this.replicationClients.add(new ReplicationClient(repServerHostIp, repServerHostPort, repServer));
         }
 
-        if (leader) {
+       if (leader) {
             server = serverBuilder.addService(new TransactionProcessingService(kvPairs, this.dataStore, this.replicationClients))
-                    .addService(new ReplicationServer.ReplicationService(InetAddress.getLocalHost().toString(), new ArrayList<KV>(), this.dataStore, replicationClients))
+                    .addService(new ReplicationServer.ReplicationService(InetAddress.getLocalHost().toString(), new ArrayList<KV>(), this.dataStore, this.replicationClients))
                     .build();
-        } else {
+       } else {
             server = serverBuilder.addService(new TransactionProcessingService(new ArrayList<KV>(), this.dataStore, this.replicationClients))
-                    .addService(new ReplicationServer.ReplicationService(InetAddress.getLocalHost().toString(), kvPairs, this.dataStore, replicationClients))
+                    .addService(new ReplicationServer.ReplicationService(InetAddress.getLocalHost().toString(), kvPairs, this.dataStore, this.replicationClients))
                     .build();
-        }
+       }
     }
 
     /** Start serving requests. */
@@ -114,7 +115,8 @@ public class TransactionProcessor {
 
         for(ReplicationClient client : server.replicationClients) {
             LocalIdentity.Builder identityBuilder = LocalIdentity.newBuilder();
-            identityBuilder.setLocalhostIp(InetAddress.getLocalHost().toString()).setListeningPort(server.port);
+            String localHost = Inet4Address.getLocalHost().toString();
+            identityBuilder.setLocalhostIp(localHost.substring(localHost.lastIndexOf("/")+1)).setListeningPort(server.port);
             String otherReplicaIp = client.handShaking(identityBuilder.build());
             if (otherReplicaIp.isEmpty()) {
                 logger.info("Registering at " + client.getServerHost() + "/" + client.getServerPort() + "failed");

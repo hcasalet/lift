@@ -36,30 +36,27 @@ public class ReplicationServer {
 
     private final int port;
     private final Server server;
-    private final List<ReplicationClient> replClients = new ArrayList<>();
 
-    public ReplicationServer(int port) throws IOException {
-        this(port, TransactionUtil.getExistingDataFile());
+    public ReplicationServer(int port, List<ReplicationClient> replicationClients) throws IOException {
+        this(port, TransactionUtil.getExistingDataFile(), replicationClients);
     }
 
     /** create a transaction processing server listening on {@code port} using {@code dataFile} */
-    public ReplicationServer(int port, URL dataFile) throws IOException {
-        this(ServerBuilder.forPort(port), port, TransactionUtil.parseData(dataFile));
+    public ReplicationServer(int port, URL dataFile, List<ReplicationClient> replicationClients) throws IOException {
+        this(ServerBuilder.forPort(port), port, TransactionUtil.parseData(dataFile), replicationClients);
     }
 
     /** Create a transaction processing server using serverBuilder as a base and key-value pair as data. */
-    public ReplicationServer(ServerBuilder<?> serverBuilder, int port, Collection<KV> kvPair) throws UnknownHostException {
+    public ReplicationServer(ServerBuilder<?> serverBuilder, int port, Collection<KV> kvPair, List<ReplicationClient> replicationClients) throws UnknownHostException {
         this.port = port;
         server = serverBuilder.addService(new ReplicationService(InetAddress.getLocalHost().toString().concat("-").concat(Integer.toString(this.port)),
-                kvPair, this.dataStore, replClients)).build();
+                kvPair, this.dataStore, replicationClients)).build();
     }
 
     /** Start serving requests. */
     public void start() throws IOException {
         server.start();
         logger.info("Server started, listening on " + port);
-
-        long timeNow = System.currentTimeMillis();
 
         new Thread() {
             @Override
@@ -74,7 +71,7 @@ public class ReplicationServer {
                 }
 
             }
-        };
+        }.start();
 
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
@@ -107,7 +104,8 @@ public class ReplicationServer {
      * Main
      */
     public static void main(String[] args) throws Exception {
-        ReplicationServer server = new ReplicationServer(Integer.parseInt(args[0]));
+        List<ReplicationClient> replClients = new ArrayList<>();
+        ReplicationServer server = new ReplicationServer(Integer.parseInt(args[0]), replClients);
         server.start();
         server.blockUntilShutdown();
     }
@@ -150,6 +148,7 @@ public class ReplicationServer {
 
             ReplicationClient client = new ReplicationClient(otherReplica.getLocalhostIp(),
                     otherReplica.getListeningPort(), this.hostname);
+
             if (this.replicationClients.add(client)) {
                 welcomeBuilder.setWelcome2JoinMessage("Welcome to join!");
                 return welcomeBuilder.build();
