@@ -183,7 +183,6 @@ public class ReplicationServer {
             }
             builder.setVoter(hostname);
 
-
             return builder.build();
         }
 

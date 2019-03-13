@@ -20,36 +20,50 @@ import java.util.logging.Logger;
  * an independent entity.
  *
  * To invoke a transactionSubmitter, do:
- * % trans-submitter <serverIP> <serverPort> <clientIP-clientPort>
+ * % trans-submitter [serverIP] [serverPort[ [clientIP-clientPort]
+ *                   [minimum_number_of_operations] [range_of_number_of_operations]
+ *                   [transaction_submission_duration]
  */
 public class TransactionSubmitter {
 
     private static final Logger logger = Logger.getLogger(TransactionSubmitter.class.getName());
     private static final int EXISTING_MAX_KEY = 201;
-    private static final int MINIMUM_NUMBER_OF_OPERATIONS = 5;
-    private static final int NUMBER_OF_OPERATIONS_SEED = 11;
-    private static final long DURATION_SECONDS = 5000;
 
     private final ManagedChannel channel;
     private final String submitterName;
     private final TransactionProcessingGrpc.TransactionProcessingBlockingStub transProcessingBlockingStub;
     private final TransactionProcessingGrpc.TransactionProcessingStub transProcessingAsyncStub;
 
+    private final int minimum_number_of_operations;
+    private final int range_of_number_of_operations;
+    private final long transaction_submission_duration;
+
     private Random random = new Random();
     private TestHelper testHelper;
     private int submissionSerialNumber = 1;
 
     /** Construct client for submitting transaction request to transaction processor at @code host:port}. */
-    public TransactionSubmitter(String serverHost, int serverPort, String clientHostname) {
-        this(ManagedChannelBuilder.forAddress(serverHost, serverPort).usePlaintext(), clientHostname);
+    public TransactionSubmitter(String serverHost, int serverPort, String clientHostname,
+                                int minimum_number_of_operations,
+                                int range_of_number_of_operations,
+                                int transaction_submission_duration) {
+        this(ManagedChannelBuilder.forAddress(serverHost, serverPort).usePlaintext(), clientHostname,
+                minimum_number_of_operations, range_of_number_of_operations, transaction_submission_duration);
     }
 
     /** Construct client for contacting the server using the existing channel. */
-    public TransactionSubmitter(ManagedChannelBuilder<?> channelBuilder, String clientHostname) {
+    public TransactionSubmitter(ManagedChannelBuilder<?> channelBuilder, String clientHostname,
+                                int minimum_number_of_operations,
+                                int range_of_number_of_operations,
+                                int transaction_submission_duration) {
         this.channel = channelBuilder.build();
         this.submitterName = clientHostname;
         this.transProcessingBlockingStub = TransactionProcessingGrpc.newBlockingStub(channel);
         this.transProcessingAsyncStub = TransactionProcessingGrpc.newStub(channel);
+
+        this.minimum_number_of_operations = minimum_number_of_operations;
+        this.range_of_number_of_operations = range_of_number_of_operations;
+        this.transaction_submission_duration = transaction_submission_duration;;
     }
 
     public void shutdown() throws InterruptedException {
@@ -80,7 +94,7 @@ public class TransactionSubmitter {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
         transBuilder.setSubmissionTime(calendar.getTime().toString());
 
-        int numberOfOperations = random.nextInt(NUMBER_OF_OPERATIONS_SEED) + MINIMUM_NUMBER_OF_OPERATIONS;
+        int numberOfOperations = random.nextInt(this.range_of_number_of_operations) + this.minimum_number_of_operations;
         for (int i=0; i<numberOfOperations; i++) {
             Operation operation;
             int command = random.nextInt(4);
@@ -172,11 +186,14 @@ public class TransactionSubmitter {
 
     public static void main(String[] args) throws InterruptedException {
 
-        TransactionSubmitter transactionSubmitter = new TransactionSubmitter(args[0], Integer.parseInt(args[1]), args[2]);
+        TransactionSubmitter transactionSubmitter = new TransactionSubmitter(args[0], Integer.parseInt(args[1]), args[2],
+                                                                             Integer.parseInt(args[3]),
+                                                                             Integer.parseInt(args[4]),
+                                                                             Integer.parseInt(args[5]));
         AtomicBoolean done = new AtomicBoolean();
 
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-        scheduler.schedule(() -> done.set(true), DURATION_SECONDS, TimeUnit.MILLISECONDS);
+        scheduler.schedule(() -> done.set(true), transactionSubmitter.transaction_submission_duration, TimeUnit.MILLISECONDS);
         long timeStart = System.currentTimeMillis();
         transactionSubmitter.doSubmissions(done);
         long timeEnd = System.currentTimeMillis();
