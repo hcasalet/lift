@@ -8,6 +8,7 @@ import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 import com.google.protobuf.Message;
+import io.grpc.StatusRuntimeException;
 import io.grpc.netty.shaded.io.netty.util.internal.StringUtil;
 import io.grpc.transprocessing.Transaction;
 
@@ -19,7 +20,6 @@ public class ReplicationClient {
 
     private static final Logger logger = Logger.getLogger(ReplicationServer.class.getName());
     private static final String WELCOME_2_JOIN = "Welcome to join!";
-    private static int logPosition = 1;
 
     private final ManagedChannel channel;
     private final ReplicationGrpc.ReplicationBlockingStub blockingStub;
@@ -84,9 +84,9 @@ public class ReplicationClient {
     /**
      * Request for replication
      */
-    public void proposeValue(Transaction transaction) {
+    public void proposeValue(Transaction transaction, int logPosition) throws StatusRuntimeException {
         ValueProposed.Builder valueBuilder = ValueProposed.newBuilder();
-        valueBuilder.setLogPosition(logPosition++).setTrans(transaction).setProposer(this.hostname);
+        valueBuilder.setLogPosition(logPosition).setTrans(transaction).setProposer(this.hostname);
 
         this.blockingStub.proposeValue(valueBuilder.build());
     }

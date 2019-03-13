@@ -2,6 +2,7 @@ package io.grpc.transprocessing;
 
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.StatusRuntimeException;
 import io.grpc.replication.LocalIdentity;
 import io.grpc.replication.ReplicationClient;
 import io.grpc.replication.ReplicationServer;
@@ -134,6 +135,7 @@ public class TransactionProcessor {
 
         private static final long SLEEP_BEFORE_INQUIRING_AGAIN = 10;
         private static final long MAXIMUM_NUMBER_OF_TRIES_ALLOWED = 3;
+        private static int logPosition = 1;
 
         private final Collection<KV> kvPairs;
         private final static ConcurrentMap<String, List<Lock>> readWriteLocks = new ConcurrentHashMap<>();
@@ -163,7 +165,7 @@ public class TransactionProcessor {
 
             try {
                 if (acquireLocks(request)) {
-                    doReplication(request);
+                    doReplication(request, logPosition++);
                     doOperations(request.getOperationList(), builder);
                     releaseLocks(request.getOperationList());
                     builder.setResultType(ProcessingResult.Type.COMMIT).setResultMessage("Transaction successfully committed.");
@@ -349,9 +351,28 @@ public class TransactionProcessor {
             }
         }
 
-        private void doReplication(Transaction trans) {
+        private void doReplication(Transaction trans, int logPos) {
+            List<ReplicationClient> toBeRemovedClients = new ArrayList<>();
             for (ReplicationClient client : this.replicationClients) {
-                client.proposeValue(trans);
+                try {
+                    client.proposeValue(trans, logPos);
+                } catch (Exception exp) {
+                    // If server is gone
+                    if ((exp instanceof StatusRuntimeException) &&
+                            (exp.getMessage().contains("UNAVAILABLE: io exception"))) {
+                        logger.info("Server " + client.getServerHost() + "/" + client.getServerPort() + "is gone, removing client to it...");
+                        toBeRemovedClients.add(client);
+                    }
+                }
+            }
+
+            /**
+             * Handles if a server replica has left the system.
+             */
+            if (!toBeRemovedClients.isEmpty()) {
+                for (ReplicationClient client : toBeRemovedClients) {
+                    this.replicationClients.remove(client);
+                }
             }
         }
     }

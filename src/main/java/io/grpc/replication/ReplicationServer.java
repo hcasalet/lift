@@ -32,7 +32,6 @@ public class ReplicationServer {
 
     private static final Logger logger = Logger.getLogger(ReplicationServer.class.getName());
     private static final Map<String, String> dataStore = new HashMap<>();
-    private static int logPosition = 0;
 
     private final int port;
     private final Server server;
@@ -115,6 +114,7 @@ public class ReplicationServer {
      */
     public static class ReplicationService extends ReplicationGrpc.ReplicationImplBase {
 
+        private static int logPosition = 0;
         private static final List<AlreadyAccepted> votedList = new ArrayList<>();
         private static final List<Transaction> replog = new ArrayList<>();
 
